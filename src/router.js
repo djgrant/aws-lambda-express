@@ -28,7 +28,7 @@ class Router {
 
     let q = [...this.middlewares];
 
-    return new Promise((resolve, reject) => {
+    const promise = new Promise((resolve, reject) => {
       this.req = Object.assign(
         {},
         {
@@ -127,12 +127,26 @@ class Router {
         }
       };
 
+      next.route = err => {
+        while (typeof q[0] === "function") {
+          q.splice(0, 1);
+        }
+        next(err);
+      };
+
       try {
         next();
       } catch (unhandledError) {
         this.res.error(unhandledError);
       }
     });
+
+    if (callback) {
+      promise.catch(this.res.error);
+      return undefined;
+    }
+
+    return promise;
   }
 }
 

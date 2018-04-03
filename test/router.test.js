@@ -307,6 +307,44 @@ describe("router", () => {
       expect(middleware2).not.toBeCalled();
     });
 
+    it("skips to the next route", () => {
+      const router = new Router();
+      const middleware1 = jest.fn();
+      const middleware2 = jest.fn((req, res, next) => next());
+      const middleware3 = jest.fn((req, res, next, err) => {
+        res.error(err);
+      });
+      const cb = jest.fn();
+      const testError = new Error("Test Error");
+
+      router.use((req, res, next) => {
+        next.route();
+      }, middleware1);
+
+      router.use(middleware2);
+
+      router.use(
+        () => {
+          throw testError;
+        },
+        middleware1,
+        (req, res, next, err) => {
+          next.route(err);
+        },
+        middleware1,
+        middleware3
+      );
+
+      router.use(middleware1, middleware3);
+
+      router.handle(event, cb);
+
+      expect(middleware1).not.toBeCalled();
+      expect(middleware2).toBeCalled();
+      expect(middleware3).toBeCalled();
+      expect(cb.mock.calls[0][0]).toBe(testError);
+    });
+
     it("passes the response object between middleware", () => {
       const router = new Router();
       const middleware = jest.fn();
