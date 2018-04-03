@@ -1,0 +1,32 @@
+{
+  "name": "aws-lambda-express",
+  "version": "0.1.0",
+  "description": "Express style routing for AWS Lambda",
+  "main": "index.js",
+  "dependencies": {
+    "route-parse": "^1.1.1",
+    "route-parser": "0.0.5"
+  },
+  "devDependencies": {
+    "jest": "^22.4.3"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/djgrant/aws-lambda-express.git"
+  },
+  "keywords": [
+    "AWS",
+    "Lambda",
+    "Express",
+    "Router"
+  ],
+  "author": "Daniel Grant",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/djgrant/aws-lambda-express/issues"
+  },
+  "homepage": "https://github.com/djgrant/aws-lambda-express#readme"
+}
