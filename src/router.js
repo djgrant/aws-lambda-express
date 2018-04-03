@@ -10,7 +10,9 @@ class Router {
 
   use(...middlewares) {
     const route =
-      typeof middlewares[0] === "string" ? middlewares.splice(0, 1)[0] : null;
+      typeof middlewares[0] === "string" || middlewares[0] instanceof RegExp
+        ? middlewares.splice(0, 1)[0]
+        : null;
 
     this.middlewares.push({
       route,
@@ -91,10 +93,20 @@ class Router {
             const match = router.match(this.req.event.requestContext.path);
 
             if (!match) {
-              return next();
+              return next(err);
             }
 
             this.req.params = match;
+          }
+
+          if (nextMiddleware.route instanceof RegExp) {
+            const match = nextMiddleware.route.test(
+              this.req.event.requestContext.path
+            );
+
+            if (!match) {
+              return next(err);
+            }
           }
 
           q = [...nextMiddleware.middlewares, ...q];
@@ -121,13 +133,13 @@ class Router {
         }
 
         try {
-          return next();
+          return next(err);
         } catch (caughtError) {
           return next(caughtError);
         }
       };
 
-      next.route = err => {
+      next.stack = err => {
         while (typeof q[0] === "function") {
           q.splice(0, 1);
         }

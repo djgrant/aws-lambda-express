@@ -220,17 +220,47 @@ describe("router", () => {
 
     it("matches a route", () => {
       const router = new Router();
-      const middleware = jest.fn();
-      const middleware2 = jest.fn();
+      const middleware1 = jest.fn();
+      const middleware2 = jest.fn((req, res, next) => next());
+      const middleware3 = jest.fn();
+      const middleware4 = jest.fn();
 
       event.requestContext.path = "/path/a/b";
 
-      router.use("/path/:to/:match", middleware);
-      router.use("/paths/:not/:match", middleware2);
+      router.use("/paths/:not/:match", middleware1);
+      router.use(middleware2);
+      router.use("/path/:to/:match", middleware3);
+      router.use("/path/:to/:match", middleware4);
+      router.use("/path/:not/:match", middleware4);
+
       router.handle(event, callback);
 
-      expect(middleware).toBeCalled();
-      expect(middleware2).not.toBeCalled();
+      expect(middleware1).not.toBeCalled();
+      expect(middleware2).toBeCalled();
+      expect(middleware3).toBeCalled();
+      expect(middleware4).not.toBeCalled();
+    });
+
+    it("matches a regex route", () => {
+      const router = new Router();
+      const middleware1 = jest.fn();
+      const middleware2 = jest.fn((req, res, next) => next());
+      const middleware3 = jest.fn();
+      const middleware4 = jest.fn();
+
+      event.requestContext.path = "/path/a/b";
+
+      router.use(/^\/notpath/, middleware1);
+      router.use(middleware2);
+      router.use(/^\/path/, middleware3);
+      router.use(/^\/path/, middleware4);
+
+      router.handle(event, callback);
+
+      expect(middleware1).not.toBeCalled();
+      expect(middleware2).toBeCalled();
+      expect(middleware3).toBeCalled();
+      expect(middleware4).not.toBeCalled();
     });
 
     it("adds the matching router params to the request object", done => {
@@ -307,7 +337,7 @@ describe("router", () => {
       expect(middleware2).not.toBeCalled();
     });
 
-    it("skips to the next route", () => {
+    it("skips to the next middleware stack", () => {
       const router = new Router();
       const middleware1 = jest.fn();
       const middleware2 = jest.fn((req, res, next) => next());
@@ -318,7 +348,7 @@ describe("router", () => {
       const testError = new Error("Test Error");
 
       router.use((req, res, next) => {
-        next.route();
+        next.stack();
       }, middleware1);
 
       router.use(middleware2);
@@ -329,7 +359,7 @@ describe("router", () => {
         },
         middleware1,
         (req, res, next, err) => {
-          next.route(err);
+          next.stack(err);
         },
         middleware1,
         middleware3
@@ -395,15 +425,39 @@ describe("router", () => {
 
       event.requestContext.path = "/sub/test";
 
+      router.use("/sub/*all", subRouter);
+      router.use("/not/sub/*all", subRouter2);
+
       subRouter.use("/sub/test", middleware);
+      subRouter.use("/sub/test", middleware2);
+
       subRouter2.use("/sub/test", middleware2);
 
-      router.use("/sub/*all", subRouter);
-      router.use("/notsub/*all", subRouter2);
       router.handle(event, callback);
 
       expect(middleware).toBeCalled();
       expect(middleware2).not.toBeCalled();
+    });
+
+    it("always calls next middleware when router does not match", () => {
+      const router = new Router();
+      const subRouter = new Router();
+      const middleware = jest.fn((req, res, next) => next());
+      const middleware2 = jest.fn((req, res, next) => next());
+      const middleware3 = jest.fn();
+
+      event.requestContext.path = "/sub/test";
+
+      router.use(subRouter, middleware);
+      router.use(middleware2);
+
+      subRouter.use("/not/sub/test", middleware3);
+
+      router.handle(event, callback);
+
+      expect(middleware).toBeCalled();
+      expect(middleware2).toBeCalled();
+      expect(middleware3).not.toBeCalled();
     });
 
     it("continues the middleware chain after a sub router chain finally calls next", () => {
