@@ -1,4 +1,4 @@
-/* eslint-disable consistent-return, no-underscore-dangle */
+/* eslint-disable consistent-return */
 const Route = require("route-parser");
 
 class Router {
@@ -16,11 +16,20 @@ class Router {
     });
   }
 
-  _getQ() {
+  getQ() {
     return this.q;
   }
 
-  respondTo(event, context = {}) {
+  handle(...args) {
+    const [event, context = {}, callback] =
+      args.length === 3 ? args : [args[0], {}, args[1]];
+
+    if (typeof callback !== "function") {
+      throw new Error(
+        "You must supply a callback to router.handle i.e. router.handle(evt, ctx, cb) or router.handle(evt, cb)"
+      );
+    }
+
     this.req = Object.assign(
       {},
       {
@@ -29,21 +38,43 @@ class Router {
       }
     );
 
-    this.res = {};
+    this.res = {
+      props: {},
+      headers: {},
+      statusCode: 200,
+      set: headers => {
+        Object.assign(this.res.headers, headers);
+        return this.res;
+      },
+      status: statusCode => {
+        this.res.statusCode = statusCode;
+        return this.res;
+      },
+      send: body => {
+        if (typeof body !== "string") {
+          this.res.error("[Router error]: res.send called with non-string");
+        }
+        callback(null, {
+          body,
+          headers: this.res.headers,
+          statusCode: this.res.statusCode
+        });
+      },
+      error: err => {
+        const msg = err ? err.toString() : "Internal error";
+        console.log(msg); // eslint-disable-line no-console
+        callback(msg);
+      }
+    };
 
-    const next = () => {
+    const next = err => {
       const nextMiddleware = this.q.splice(0, 1)[0];
 
-      if (!nextMiddleware) return;
-
-      if (typeof nextMiddleware === "function") {
-        return nextMiddleware(this.req, this.res, next);
-      }
+      if (!nextMiddleware) return null;
 
       if (nextMiddleware instanceof Router) {
         const subRouter = nextMiddleware;
-        this.q = [...subRouter._getQ(), ...this.q];
-        return next();
+        this.q = [...subRouter.getQ(), ...this.q];
       }
 
       if (nextMiddleware.middlewares && nextMiddleware.middlewares.length) {
@@ -51,22 +82,47 @@ class Router {
           const router = new Route(nextMiddleware.route);
           const match = router.match(this.req.event.requestContext.path);
 
-          if (!match) return next();
+          if (!match) {
+            return next();
+          }
 
           this.req.params = match;
         }
 
         this.q = [...nextMiddleware.middlewares, ...this.q];
+      }
 
-        return next();
+      if (err) {
+        if (
+          typeof nextMiddleware === "function" &&
+          nextMiddleware.length === 4
+        ) {
+          return nextMiddleware(this.req, this.res, next, err);
+        }
+
+        return next(err);
+      }
+
+      if (typeof nextMiddleware === "function") {
+        return nextMiddleware(this.req, this.res, next);
+      }
+
+      try {
+        const maybePromise = next();
+        if (maybePromise && maybePromise.then) {
+          maybePromise.catch(promiseError => {
+            next(promiseError);
+          });
+        }
+      } catch (caughtError) {
+        next(caughtError);
       }
     };
 
     try {
       next();
-      return Promise.resolve(this.res);
-    } catch (err) {
-      return Promise.reject(err);
+    } catch (unhandledError) {
+      this.res.status(500).send(unhandledError.toString());
     }
   }
 }
