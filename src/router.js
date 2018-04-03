@@ -3,21 +3,21 @@ const Route = require("route-parser");
 
 class Router {
   constructor() {
-    this.q = [];
+    this.middlewares = [];
   }
 
   use(...middlewares) {
     const route =
       typeof middlewares[0] === "string" ? middlewares.splice(0, 1)[0] : null;
 
-    this.q.push({
+    this.middlewares.push({
       route,
       middlewares
     });
   }
 
-  getQ() {
-    return this.q;
+  getMiddlewares() {
+    return this.middlewares;
   }
 
   handle(...args) {
@@ -29,6 +29,8 @@ class Router {
         "You must supply a callback to router.handle i.e. router.handle(evt, ctx, cb) or router.handle(evt, cb)"
       );
     }
+
+    let q = [...this.middlewares];
 
     this.req = Object.assign(
       {},
@@ -68,13 +70,13 @@ class Router {
     };
 
     const next = err => {
-      const nextMiddleware = this.q.splice(0, 1)[0];
+      const nextMiddleware = q.splice(0, 1)[0];
 
       if (!nextMiddleware) return null;
 
       if (nextMiddleware instanceof Router) {
         const subRouter = nextMiddleware;
-        this.q = [...subRouter.getQ(), ...this.q];
+        this.q = [...subRouter.getMiddlewares(), ...q];
       }
 
       if (nextMiddleware.middlewares && nextMiddleware.middlewares.length) {
@@ -89,7 +91,7 @@ class Router {
           this.req.params = match;
         }
 
-        this.q = [...nextMiddleware.middlewares, ...this.q];
+        q = [...nextMiddleware.middlewares, ...q];
       }
 
       if (err) {
