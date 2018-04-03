@@ -1,6 +1,7 @@
-const Route = require('route-parser');
+const Route = require("route-parser");
 
-const isPromise = p => p !== null && typeof p === 'object' && typeof p.then === 'function';
+const isPromise = p =>
+  p !== null && typeof p === "object" && typeof p.then === "function";
 
 class Router {
   constructor() {
@@ -8,7 +9,8 @@ class Router {
   }
 
   use(...middlewares) {
-    const route = typeof middlewares[0] === 'string' ? middlewares.splice(0, 1)[0] : null;
+    const route =
+      typeof middlewares[0] === "string" ? middlewares.splice(0, 1)[0] : null;
 
     this.middlewares.push({
       route,
@@ -21,8 +23,8 @@ class Router {
   }
 
   handle(event, ...args) {
-    const callback = typeof args[1] === 'function' ? args[1] : args[0];
-    const context = typeof args[0] === 'object' ? args[0] : {};
+    const callback = typeof args[1] === "function" ? args[1] : args[0];
+    const context = typeof args[0] === "object" ? args[0] : {};
 
     let q = [...this.middlewares];
 
@@ -47,27 +49,25 @@ class Router {
           this.res.statusCode = statusCode;
           return this.res;
         },
-        send: (body = '') => {
-          if (typeof body !== 'string') {
-            this.res.error('[Router error]: res.send called with non-string');
+        send: (body = "") => {
+          if (typeof body !== "string") {
+            this.res.error("[Router error]: res.send called with non-string");
           }
 
-          const response = { body, headers: this.res.headers, statusCode: this.res.statusCode };
+          const response = {
+            body,
+            headers: this.res.headers,
+            statusCode: this.res.statusCode
+          };
 
           if (callback) callback(null, response);
 
           resolve(response);
         },
         error: err => {
-          const msg = err ? err.toString() : 'Internal error';
+          if (callback) callback(err);
 
-          if (process.env.NODE_ENV !== 'test') {
-            console.log(`[Router error]: ${msg}`); // eslint-disable-line no-console
-          }
-
-          if (callback) callback(msg);
-
-          reject(msg);
+          reject(err);
         }
       };
 
@@ -86,7 +86,7 @@ class Router {
         }
 
         if (nextMiddleware.middlewares && nextMiddleware.middlewares.length) {
-          if (typeof nextMiddleware.route === 'string') {
+          if (typeof nextMiddleware.route === "string") {
             const router = new Route(nextMiddleware.route);
             const match = router.match(this.req.event.requestContext.path);
 
@@ -100,15 +100,21 @@ class Router {
           q = [...nextMiddleware.middlewares, ...q];
         }
 
-        if (err && (typeof nextMiddleware !== 'function' || nextMiddleware.length !== 4)) {
+        if (
+          err &&
+          (typeof nextMiddleware !== "function" || nextMiddleware.length !== 4)
+        ) {
           return next(err);
         }
 
-        if (typeof nextMiddleware === 'function') {
+        if (typeof nextMiddleware === "function") {
           const result = nextMiddleware(this.req, this.res, next, err);
           if (isPromise(result)) {
             result.catch(promiseError => {
-              next(promiseError || new Error(`Caught falsey error in promise: ${promiseError}`));
+              next(
+                promiseError ||
+                  new Error(`Caught falsey error in promise: ${promiseError}`)
+              );
             });
           }
           return result;

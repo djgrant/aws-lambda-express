@@ -28,7 +28,7 @@ describe("router", () => {
       router.handle(event, cb);
 
       expect(cb).toBeCalled();
-      expect(cb.mock.calls[0][0]).toBe(testError.toString());
+      expect(cb.mock.calls[0][0]).toBe(testError);
       expect(cb.mock.calls[0][1]).toBe(undefined);
     });
 
@@ -508,7 +508,7 @@ describe("router", () => {
 
       router.handle(event, cb);
 
-      expect(cb.mock.calls[0][0]).toBe(testError.toString());
+      expect(cb.mock.calls[0][0]).toBe(testError);
     });
 
     it("catches promise rejections and sends a 500 error", () => {
@@ -517,7 +517,7 @@ describe("router", () => {
 
       router.use(() => Promise.reject(testError));
 
-      return expect(router.handle(event)).rejects.toBe(testError.toString());
+      return expect(router.handle(event)).rejects.toBe(testError);
     });
   });
 });
