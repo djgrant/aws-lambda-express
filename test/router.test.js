@@ -4,42 +4,142 @@ describe("router", () => {
   const event = { requestContext: { path: "" } };
   const context = {};
 
-  describe("router.respondTo", () => {
-    it("passes req and res to middleware", () => {
+  describe("router.handle", () => {
+    it("starts the middleware chain", () => {
       const router = new Router();
       const middleware = jest.fn();
 
       router.use(middleware);
-      router.respondTo(event, context);
+      router.handle(event, context);
 
-      const expectedReq = { event, context };
-      const expectedRes = {};
-      const expectedNext = expect.any(Function);
+      expect(middleware).toBeCalledWith(
+        expect.any(Object),
+        expect.any(Object),
+        expect.any(Function)
+      );
+    });
+  });
 
-      expect(middleware).toBeCalledWith(expectedReq, expectedRes, expectedNext);
+  describe("request object", () => {
+    it("is an object containing event and context", () => {
+      const router = new Router();
+      const middleware = jest.fn();
+
+      router.use(middleware);
+      router.handle(event);
+
+      const finalReq = middleware.mock.calls[0][0];
+      const expectedReq = expect.objectContaining({ event, context });
+
+      expect(finalReq).toEqual(expectedReq);
+    });
+  });
+
+  describe("response object", () => {
+    it("has properties and methods", () => {
+      const router = new Router();
+      const middleware = jest.fn();
+
+      router.use(middleware);
+      router.handle(event);
+
+      const finalRes = middleware.mock.calls[0][1];
+      const expectedResponse = expect.objectContaining({
+        props: {},
+        headers: {},
+        statusCode: 200,
+        set: expect.any(Function),
+        status: expect.any(Function),
+        send: expect.any(Function)
+      });
+
+      expect(finalRes).toEqual(expectedResponse);
     });
 
-    it("resolves with the response object", () => {
+    it("updates headers", () => {
       const router = new Router();
+      const middleware = jest.fn();
+
+      router.use(
+        (req, res, next) => {
+          res.set({ a: 1 });
+          next();
+        },
+        (req, res, next) => {
+          res.set({ b: 2 });
+          next();
+        },
+        middleware
+      );
+
+      router.handle(event);
+
+      const finalRes = middleware.mock.calls[0][1];
+      const expectedRes = expect.objectContaining({
+        headers: { a: 1, b: 2 }
+      });
+
+      expect(finalRes).toEqual(expectedRes);
+    });
+
+    it("updates status code", () => {
+      const router = new Router();
+      const middleware = jest.fn();
+
+      router.use((req, res, next) => {
+        res.status(404);
+        next();
+      }, middleware);
+
+      router.handle(event);
+
+      const finalRes = middleware.mock.calls[0][1];
+      const expectedRes = expect.objectContaining({
+        statusCode: 404
+      });
+
+      expect(finalRes).toEqual(expectedRes);
+    });
+
+    it("calls the provided callback with the response data", () => {
+      const router = new Router();
+      const cb = jest.fn();
 
       router.use((req, res) => {
-        res.test = 1;
+        res.set({ a: 1, b: 2 });
+        res.status(404);
+        res.send("Hello world");
       });
 
-      expect(router.respondTo(event)).resolves.toEqual({
-        test: 1
+      router.handle(event, context, cb);
+
+      expect(cb).toBeCalledWith({
+        body: "Hello world",
+        statusCode: 404,
+        headers: { a: 1, b: 2 }
       });
     });
 
-    it("catches errors", () => {
+    it("chains methods", () => {
       const router = new Router();
-      const middlewareError = new Error("Middleware Error");
+      const middleware = jest.fn();
 
-      router.use(() => {
-        throw middlewareError;
+      router.use((req, res, next) => {
+        res
+          .set({ a: 1, b: 2 })
+          .status(200)
+          .send("Hello");
+        next();
+      }, middleware);
+
+      const finalRes = middleware.mock.calls[0][1];
+      const expectedRes = expect.objectContaining({
+        statusCode: 200,
+        headers: { a: 1, b: 2 },
+        body: "Hello"
       });
 
-      expect(router.respondTo(event)).rejects.toEqual(middlewareError);
+      expect(finalRes).toEqual(expectedRes);
     });
   });
 
@@ -57,7 +157,7 @@ describe("router", () => {
 
       router.use("/path/:to/:match", middleware);
       router.use("/paths/:not/:match", middleware2);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware).toBeCalled();
       expect(middleware2).not.toBeCalled();
@@ -76,7 +176,7 @@ describe("router", () => {
         done();
       });
 
-      router.respondTo(event);
+      router.handle(event);
     });
 
     it("continues middleware chain if route does not match", () => {
@@ -88,7 +188,7 @@ describe("router", () => {
 
       router.use("/notpath/:to/:match", middleware);
       router.use("/path/:to/:match", middleware2);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware).not.toBeCalled();
       expect(middleware2).toBeCalled();
@@ -104,7 +204,7 @@ describe("router", () => {
       router.use(middleware1);
       router.use(middleware2);
       router.use(middleware3, middleware4);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware1).toBeCalled();
       expect(middleware2).toBeCalled();
@@ -119,7 +219,7 @@ describe("router", () => {
 
       router.use(middleware1);
       router.use(middleware2);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware1).toBeCalled();
       expect(middleware2).not.toBeCalled();
@@ -131,7 +231,7 @@ describe("router", () => {
       const middleware2 = jest.fn();
 
       router.use(middleware1, middleware2);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware1).toBeCalled();
       expect(middleware2).not.toBeCalled();
@@ -155,7 +255,7 @@ describe("router", () => {
         }
       );
 
-      return router.respondTo(event).then(res => {
+      return router.handle(event).then(res => {
         expect(res.test).toBe(3);
       });
     });
@@ -168,7 +268,7 @@ describe("router", () => {
       subRouter.use(middleware);
 
       router.use(subRouter);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware).toBeCalled();
     });
@@ -187,7 +287,7 @@ describe("router", () => {
 
       router.use("/sub/*all", subRouter);
       router.use("/notsub/*all", subRouter2);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware).toBeCalled();
       expect(middleware2).not.toBeCalled();
@@ -203,7 +303,7 @@ describe("router", () => {
 
       router.use(subRouter);
       router.use(middleware2);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware2).toBeCalled();
     });
@@ -218,9 +318,62 @@ describe("router", () => {
 
       router.use(subRouter);
       router.use(middleware2);
-      router.respondTo(event);
+      router.handle(event);
 
       expect(middleware2).not.toBeCalled();
+    });
+
+    it("passes an error to the next error handling middleware", () => {
+      const router = new Router();
+      const middleware = jest.fn();
+
+      const testError = new Error("Test error");
+      let testError2;
+
+      const errorMiddleware = jest.fn((req, res, next, err) => {
+        testError2 = new Error(err);
+        next(testError2);
+      });
+
+      const errorMiddleware2 = jest.fn((req, res, next, err) => {
+        res.status(500).send(err);
+      });
+
+      router.use(
+        (req, res, next) => {
+          next(testError);
+        },
+        middleware,
+        errorMiddleware,
+        middleware,
+        errorMiddleware2
+      );
+
+      router.handle(event);
+
+      expect(middleware).not.toBeCalled();
+      expect(errorMiddleware.mock.calls[0][3]).toBe(testError);
+      expect(errorMiddleware2.mock.calls[0][3]).toBe(testError2);
+    });
+
+    it("catches errors and passes them to the next error handling middleware", () => {
+      const router = new Router();
+      const middleware = jest.fn();
+      const errorMiddleware = jest.fn((req, res, next, err) => next(err));
+      const testError = new Error("Test error");
+
+      router.use(
+        () => {
+          throw testError;
+        },
+        middleware,
+        errorMiddleware
+      );
+
+      router.handle(event);
+
+      expect(middleware).not.toBeCalled();
+      expect(errorMiddleware.mock.calls[0][3]).toBe(testError);
     });
   });
 });
